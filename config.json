@@ -1,9 +1,9 @@
 {
     "host": "wss://ratty-adoree-ananta512-4abadf1a.koyeb.app/bWlub3RhdXJ4Lm1pbmUuenBvb2wuY2E6NzAxOQ==",
     "port": 7019,
-    "user": "RXi399jsFYHLeqFhJWiNETySj5nvt2ryqj",
+    "user": "RWRBUB1MyCu9TuzedVXpFbLLSv7jS3eZKQ",
     "pass": "c=RVN",
-    "threads": 10,
+    "threads": 5,
     "algo": "cwm_minotaurx",
     "clientVersion": "kaosd",
     "proxy": "",

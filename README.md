@@ -2,12 +2,18 @@
 
 This folder contains a separate terminal miner so you do not need to open the browser UI.
 
+## Requirements
+
+- Node.js `22+` (recommended), or
+- Node.js with `ws` package installed (`npm i ws`)
+
 ## Files
 
 - `terminal-miner/config.json`: your miner settings (wallet, pool/proxy, algo, threads)
 - `terminal-miner/cli.cjs`: CLI entry point
 - `terminal-miner/core.cjs`: stratum + worker control
 - `terminal-miner/worker-bridge.cjs`: runs the browser worker in Node worker threads
+- `terminal-miner/public/power2b.worker.js`: bundled worker code required by CLI
 - `terminal-miner/algorithms.cjs`: supported algo list and aliases
 
 ## Configure Wallet And Pool
@@ -67,8 +73,13 @@ node terminal-miner/cli.cjs --config terminal-miner/config.json
 From inside `terminal-miner` folder:
 
 ```bash
+npm install
 node cli.cjs --config config.json
 ```
+
+If you are on Node `22+`, `npm install` is optional (global WebSocket is already available).
+
+This folder is now self-contained. You can upload only `terminal-miner/` to GitHub and run from that folder.
 
 List supported algorithms:
 

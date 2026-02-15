@@ -3,6 +3,24 @@ const { Worker } = require("worker_threads");
 const { EventEmitter } = require("events");
 const { normalizeAlgo } = require("./algorithms.cjs");
 
+function resolveWebSocketImpl() {
+    if (typeof globalThis.WebSocket === "function") {
+        return globalThis.WebSocket;
+    }
+
+    try {
+        // Node versions without global WebSocket can use ws package.
+        // eslint-disable-next-line global-require
+        return require("ws");
+    } catch (_) {
+        throw new Error(
+            "WebSocket is not available. Use Node 22+ or install ws: npm i ws"
+        );
+    }
+}
+
+const WebSocketImpl = resolveWebSocketImpl();
+
 function toUtf8(data) {
     if (typeof data === "string") return data;
     if (data instanceof ArrayBuffer) return Buffer.from(data).toString("utf8");
@@ -123,7 +141,7 @@ class CliMiner extends EventEmitter {
 
     connect() {
         this.setStatus("Connecting...");
-        this.socket = new WebSocket(this.socketUrl);
+        this.socket = new WebSocketImpl(this.socketUrl);
         this.socket.binaryType = "arraybuffer";
 
         this.socket.onopen = () => {
@@ -231,7 +249,7 @@ class CliMiner extends EventEmitter {
     }
 
     sendJson(method, params, requestType = "generic") {
-        if (!this.connected || !this.socket || this.socket.readyState !== WebSocket.OPEN) return null;
+        if (!this.connected || !this.socket || this.socket.readyState !== WebSocketImpl.OPEN) return null;
         const id = this.msgId++;
         const message = {
             id,
