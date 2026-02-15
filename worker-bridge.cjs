@@ -4,7 +4,41 @@ const vm = require("vm");
 const { parentPort } = require("worker_threads");
 const { performance } = require("perf_hooks");
 
-const POWER2B_WORKER_PATH = path.resolve(__dirname, "..", "public", "power2b.worker.js");
+function resolvePublicDir() {
+    const candidates = [];
+    const seen = new Set();
+    const addCandidate = (dir) => {
+        const normalized = path.resolve(dir);
+        if (!seen.has(normalized)) {
+            seen.add(normalized);
+            candidates.push(normalized);
+        }
+    };
+
+    if (process.env.MINER_PUBLIC_DIR) {
+        addCandidate(process.env.MINER_PUBLIC_DIR);
+    }
+
+    // Prefer local self-contained folder first.
+    addCandidate(path.resolve(__dirname, "public"));
+    // Usual layout in monorepo: terminal-miner/* with ../public/*
+    addCandidate(path.resolve(__dirname, "..", "public"));
+    // Fallback to runtime cwd/public
+    addCandidate(path.resolve(process.cwd(), "public"));
+
+    for (const dir of candidates) {
+        if (fs.existsSync(path.join(dir, "power2b.worker.js"))) {
+            return dir;
+        }
+    }
+
+    throw new Error(
+        `Could not find public directory with power2b.worker.js. Checked: ${candidates.join(", ")}`
+    );
+}
+
+const PUBLIC_DIR = resolvePublicDir();
+const POWER2B_WORKER_PATH = path.join(PUBLIC_DIR, "power2b.worker.js");
 
 function resolveImportPath(scriptPath) {
     if (/^https?:\/\//i.test(scriptPath)) {
@@ -12,7 +46,7 @@ function resolveImportPath(scriptPath) {
     }
 
     if (scriptPath.startsWith("/")) {
-        return path.resolve(__dirname, "..", "public", scriptPath.slice(1));
+        return path.resolve(PUBLIC_DIR, scriptPath.replace(/^\/+/, ""));
     }
 
     if (path.isAbsolute(scriptPath)) {
