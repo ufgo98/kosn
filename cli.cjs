@@ -103,6 +103,12 @@ function main() {
 
     const config = readConfig(options.configPath);
     validateConfig(config);
+    const alphaRaw = Number(config.hashrateSmoothing);
+    const hashrateSmoothing = Number.isFinite(alphaRaw)
+        ? Math.max(0, Math.min(1, alphaRaw))
+        : 0.25;
+    const holdRaw = Number(config.hashrateHoldMs);
+    const hashrateHoldMs = Number.isFinite(holdRaw) && holdRaw >= 0 ? holdRaw : 10000;
 
     const state = {
         status: "Idle",
@@ -116,6 +122,36 @@ function main() {
     let lastLineLength = 0;
     let isShuttingDown = false;
     let outputBroken = false;
+    let smoothedHashrate = 0;
+    let lastNonZeroRawHashrate = 0;
+    let lastNonZeroAt = 0;
+    let lastHashrateUpdateAt = 0;
+
+    function updateDisplayHashrate(rawValue) {
+        const now = Date.now();
+        const raw = Number(rawValue) || 0;
+        lastHashrateUpdateAt = now;
+
+        if (raw > 0) {
+            lastNonZeroRawHashrate = raw;
+            lastNonZeroAt = now;
+        } else if (lastNonZeroRawHashrate > 0 && (now - lastNonZeroAt) <= hashrateHoldMs) {
+            // Ignore brief 0 reports from worker handoff/report gaps.
+            return;
+        }
+
+        if (smoothedHashrate <= 0 || hashrateSmoothing >= 1) {
+            smoothedHashrate = raw;
+        } else {
+            smoothedHashrate = (hashrateSmoothing * raw) + ((1 - hashrateSmoothing) * smoothedHashrate);
+        }
+
+        if (raw === 0 && smoothedHashrate < 0.5) {
+            smoothedHashrate = 0;
+        }
+
+        state.hashrate = smoothedHashrate;
+    }
 
     function safeWrite(text) {
         if (outputBroken) return;
@@ -137,6 +173,16 @@ function main() {
 
     function render() {
         if (outputBroken) return;
+
+        if (smoothedHashrate > 0) {
+            const idleMs = Date.now() - lastHashrateUpdateAt;
+            if (idleMs > hashrateHoldMs) {
+                smoothedHashrate *= 0.97;
+                if (smoothedHashrate < 0.5) smoothedHashrate = 0;
+                state.hashrate = smoothedHashrate;
+            }
+        }
+
         const line = createLine(state);
         const padded = line.padEnd(Math.max(lastLineLength, line.length), " ");
         safeWrite(`\r${padded}`);
@@ -172,13 +218,13 @@ function main() {
     });
 
     miner.on("hashrate", (value) => {
-        state.hashrate = Number(value) || 0;
+        updateDisplayHashrate(value);
     });
 
     miner.on("stats", (stats) => {
         state.accepted = Number(stats.accepted) || 0;
         state.rejected = Number(stats.rejected) || 0;
-        state.hashrate = Number(stats.hashrate) || state.hashrate;
+        updateDisplayHashrate(stats.hashrate);
     });
 
     miner.on("error", (err) => {

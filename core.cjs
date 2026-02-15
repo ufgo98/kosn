@@ -82,6 +82,7 @@ class CliMiner extends EventEmitter {
 
         this.msgId = 1;
         this.pendingRequests = new Map();
+        this.reuseWorkersOnDirtyJobs = this.config.reuseWorkersOnDirtyJobs !== false;
 
         const requestedThreads = Number(this.config.threads ?? this.config.workers ?? 1);
         this.threads = Number.isFinite(requestedThreads) && requestedThreads > 0
@@ -135,7 +136,7 @@ class CliMiner extends EventEmitter {
             this.socket = null;
         }
 
-        this.terminateWorkers();
+        this.terminateWorkers({ emitZero: true });
         this.setStatus("Stopped");
     }
 
@@ -163,7 +164,7 @@ class CliMiner extends EventEmitter {
 
         this.socket.onclose = () => {
             this.connected = false;
-            this.terminateWorkers();
+            this.terminateWorkers({ emitZero: true });
             if (this.running) {
                 this.setStatus("Disconnected");
                 this.emit("close");
@@ -269,21 +270,40 @@ class CliMiner extends EventEmitter {
         }, 700);
     }
 
-    terminateWorkers() {
+    terminateWorkers(options = {}) {
+        const emitZero = options.emitZero !== false;
         for (const worker of this.workers) {
             worker.terminate();
         }
         this.workers = [];
-        this.workerHashrates = new Array(this.threads).fill(0);
-        this.hashrate = 0;
-        this.emit("hashrate", 0);
-        this.emitStats();
+
+        if (emitZero) {
+            this.workerHashrates = new Array(this.threads).fill(0);
+            this.hashrate = 0;
+            this.emit("hashrate", 0);
+            this.emitStats();
+        }
     }
 
     notifyWorkers(job) {
-        this.terminateWorkers();
+        const hasWorkerPool = this.workers.length === this.threads;
+        const shouldReuseCurrentWorkers = this.reuseWorkersOnDirtyJobs
+            && hasWorkerPool
+            && job
+            && job.clean_jobs === false;
+
+        if (shouldReuseCurrentWorkers) {
+            // Stratum clean_jobs=false means previous jobs are still valid. Keep workers
+            // alive to avoid respawn churn and hashrate dips on every notify.
+            this.emit("job_reused", job.jobId);
+            return;
+        }
+
+        this.terminateWorkers({ emitZero: false });
         const generation = ++this.jobGeneration;
-        this.workerHashrates = new Array(this.threads).fill(0);
+
+        const baseline = this.hashrate > 0 ? (this.hashrate / Math.max(this.threads, 1)) : 0;
+        this.workerHashrates = new Array(this.threads).fill(baseline);
 
         for (let index = 0; index < this.threads; index++) {
             this.createWorker(index, job, generation);

@@ -31,6 +31,9 @@ Example:
     "threads": 1,
     "algo": "cwm_power2B",
     "clientVersion": "webminer/1.0",
+    "reuseWorkersOnDirtyJobs": true,
+    "hashrateSmoothing": 0.25,
+    "hashrateHoldMs": 10000,
     "proxy": "",
     "statsIntervalMs": 1000
 }
@@ -45,6 +48,9 @@ Field meaning:
 - `threads`: number of CPU threads
 - `algo`: algorithm value from the supported list below
 - `clientVersion`: value sent in `mining.subscribe` (default `webminer/1.0`)
+- `reuseWorkersOnDirtyJobs`: keep workers alive when `clean_jobs=false` to reduce respawn overhead
+- `hashrateSmoothing`: smoothing factor `0..1` for displayed hashrate (`0.25` default)
+- `hashrateHoldMs`: ignore brief zero reports for this long (default `10000`)
 - `proxy`: websocket proxy base URL (only needed when `host` is not already a full `ws/wss` URL)
 - `statsIntervalMs`: terminal refresh interval
 
